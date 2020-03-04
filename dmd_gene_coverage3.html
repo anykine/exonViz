@@ -1,0 +1,140 @@
+<html>
+  <head>
+    <script type="text/javascript" src="js/d3.min.js"></script>
+<style type='text/css'>
+  rect {
+     stroke: #006600;
+     stroke-width: 1;
+     fill: #00cc00;
+  }
+  .info {
+      height: 35;
+      width: 110;
+      position: absolute;
+      background: #808080;
+      border-radius: 10px;  /* rounded corner */
+      opacity: 0.9;
+      top: 0;
+      left: 0;
+      padding: 8;
+      display: none;
+      color: white;
+      font-family: Verdana, Geneva, sans-serif;
+      font-size: 10px;
+      pointer-events: none;  /* this prevents flickering of tooltip  */
+  }
+  .sampleLabel {
+      x:  0;
+      fill: "black";
+      font-size: 12px;
+      line-height: 12px;
+      font-family: Verdana, Geneva, sans-serif;
+      dy: 35em;
+  }
+</style>
+<script>
+var cellwidth = 15;
+var cellheight=15;
+  // convert number to color
+var colorScale = d3.scale.linear()
+                    .domain([0, 1, 1000])
+                    .range(["red", "white", "blue"]);
+
+  // d3.tsv("1509_sample_coverage_T_fixed.txt", function(data) {d = data});  //useful for debugging
+
+// Read in tab sep file
+// .row() iterates over each row of data and uses
+//  accessor function to convert string to numbers
+//, "d" is a single row of data in JSON format
+d3.tsv("1509_sample_coverage_T_fixed.txt")
+    .row(function(d) {  // restrcture JSON to be {Sample: CDMDNNNN, coverage: {1:10, 2:20,..}}
+        var Sample = d.Sample;
+        Coverage = d;
+        delete Coverage.Sample; //remove the Sample name from JSON
+        arr = [];
+        Object.keys(Coverage).map( function(key, index) {  //iterate over JSON keys and conver to int
+            Coverage[key] = +Coverage[key];
+            arr.push(Coverage[key]);
+        });
+        return{
+            "Sample": Sample,
+            "Coverage" : arr
+        };
+    })
+    .get(function (error, tsv) {  // Do something with the data. "tsv" is the entire dataset
+
+      // styling for info box on mouseover
+      dataLabel = d3.select("body")
+                     .append('div')
+                     .attr("class", "info");
+
+      // create SVG region
+      var body = d3.select("body").append("svg")
+                    .attr("width", cellwidth * 100)
+                    .attr("height", cellheight* 100)
+                    .attr("x", 0)
+                    .attr("y", 0);
+      if (!error) {
+        // tsv is an array of objects,
+        // Iterate over array 52 times(number of samples)
+        // to create one <g> per sample
+        var grp = body.selectAll("g")
+                        .data(tsv)
+                        .enter()
+                        .append("g")
+                        .attr("class", "col")
+                        .attr('transform', function(d,i) {return 'translate(70, ' + cellheight * i + ')';}) ; //easy way to set Y coords for all elements within group <g>
+
+          // Create Sample labels
+        //   d3.select("body svg").selectAll("text")
+        //                         .data(tsv)
+        //                         .enter().append("text")
+        //                         .attr("y", function(d, i) { return 10*i })
+        //                         .attr("class", "sampleLabel")
+        //                         .text(function(d) { return d.Sample});
+
+        // For each <g> tag above, create 79 svg:rect (one per exon)
+         grp.selectAll("rect")
+              .data(function(d) {
+                   return d["Coverage"];
+               })
+              .enter()
+              .append("rect")
+              .attr('x', function(d,i) {   return i*cellwidth; })  //loops throgh all x's and set xpos based on index i
+              .attr('y', function(d,i) {  return 0; })  //loops through all ys and sets ypos=0; parent <g> sets the ypos
+              .attr('width', cellwidth)
+              .attr('height', cellheight)
+              .style('fill', function(d) { return colorScale(d); })
+              .on("mouseover", function(d, i, j) {
+                  var Sample = d3.select(this.parentNode).data()[0].Sample;  //Visit parent node to get sample name!
+                  d3.select(this)  //highlight the selected rect
+                      .attr('stroke-width', 1)
+                      .attr('stroke', 'black');
+
+                  // populate the tooltip
+                  dataLabel.html("Sample:" + Sample + "<br/>exon:" + (i+1) + "<br/>coverage:"+d.toFixed(2) + "<br/>")
+                              .style('top', 20)
+                              .style('display', 'block')
+                              .style("left", (d3.event.pageX + 10) + "px")
+                              .style("top", (d3.event.pageY-30) + "px");
+                })
+                 .on("mouseout", function(d, i) {
+                    d3.select(this)
+                          .attr('stroke-width', 1)
+                          .attr('stroke', 'green')
+                    dataLabel.style('display', 'none')
+                });
+      } //end if(error)
+
+    });
+</script>
+</head>
+<body>
+    <div class="chart"></div>
+
+    <p>Exome sequencing coverage by exon for affected individulas in our sample.
+    Samples are rows, columns are exons 1-79.
+    Red indicates probable deletion.
+  </p>
+</body>
+</html>
